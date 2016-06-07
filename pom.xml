@@ -19,14 +19,13 @@
 
   <modelVersion>4.0.0</modelVersion>
   <groupId>net.hamnaberg.json</groupId>
-  <artifactId>iso-compiler-generator</artifactId>
+  <artifactId>codec-compiler-generator</artifactId>
   <version>0.1-SNAPSHOT</version>
   <packaging>pom</packaging>
   <name>iso :: parent</name>
-  <url>https://github.com/hamnaberg/iso-compiler-generator</url>
-  <inceptionYear>2015</inceptionYear>
+  <url>https://github.com/hamnis/codec-compiler-generator</url>
+  <inceptionYear>2016</inceptionYear>
   <description>Generator of Iso types</description>
-
 
   <modules>
     <module>processor</module>
