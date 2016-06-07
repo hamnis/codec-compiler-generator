@@ -2,11 +2,15 @@ package iso;
 
 
 import com.squareup.javapoet.*;
+import javaslang.Tuple;
+import net.hamnaberg.json.Codecs;
 import net.hamnaberg.json.Iso;
+import net.hamnaberg.json.JsonCodec;
 
 import javax.annotation.processing.*;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.*;
+import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.ElementFilter;
 import javax.tools.Diagnostic;
@@ -16,10 +20,12 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
-@SupportedAnnotationTypes("iso.IsoTarget")
-public class IsoProcessor extends AbstractProcessor {
+@SupportedAnnotationTypes("iso.GeneratedCodec")
+public class GeneratedCodecProcessor extends AbstractProcessor {
     private Filer filer;
     private Messager messager;
+    private ClassName jsonCodecName = ClassName.get(JsonCodec.class);
+    private ClassName CodecsName = ClassName.get(Codecs.class);
 
     @Override
     public synchronized void init(ProcessingEnvironment processingEnv) {
@@ -30,30 +36,72 @@ public class IsoProcessor extends AbstractProcessor {
 
     @Override
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
-        List<TypeElement> classes = roundEnv.getElementsAnnotatedWith(IsoTarget.class).
+        List<TypeElement> classes = roundEnv.getElementsAnnotatedWith(GeneratedCodec.class).
                 stream().filter(e -> e.getKind() == ElementKind.CLASS).map(e -> (TypeElement) e).collect(Collectors.toList());
 
         try {
             if (!classes.isEmpty()) {
+                Map<TypeName, String> codecs = getDefaultCodecs();
+                Map<String, TypeSpec.Builder> builders = new HashMap<>();
+
                 classes.forEach(e -> {
-                    try {
-                        validate(e);
-                        createIso(e);
-                    } catch (ProcessorException e1) {
-                        messager.printMessage(Diagnostic.Kind.ERROR, e1.getMessage(), e);
+                    validate(e);
+                    GeneratedCodec generatedCodec = e.getAnnotation(GeneratedCodec.class);
+                    IsoContainer iso = createIso(e, generatedCodec.targetPackage());
+                    String targetPackage = iso.generatedType.packageName();
+                    TypeSpec.Builder builder = builders.get(targetPackage);
+                    ClassName generatedCodecsName = ClassName.get(targetPackage, "GeneratedCodecs");
+                    if (builder == null) {
+                        builder = TypeSpec.classBuilder(generatedCodecsName);
+                        builder.addModifiers(Modifier.PUBLIC, Modifier.ABSTRACT);
+                        builder.addMethod(MethodSpec.constructorBuilder().addModifiers(Modifier.PRIVATE).build());
+                        builders.put(targetPackage, builder);
                     }
+                    TypeName typeName = getType(e);
+                    ParameterizedTypeName codecType = ParameterizedTypeName.get(jsonCodecName, typeName);
+                    String fieldNames = iso.fields.keySet().stream().map(s -> "\"" + s + "\"").collect(Collectors.joining(","));
+                    String calculatedFields = useCodecs(codecs, iso.fields);
+                    FieldSpec.Builder b = FieldSpec.builder(codecType, e.getSimpleName().toString(), Modifier.PUBLIC, Modifier.STATIC, Modifier.FINAL);
+                    codecs.put(typeName, String.format("%s.%s", generatedCodecsName, e.getSimpleName()));
+                    b.initializer(
+                            "$T.codec$L($T.INSTANCE, $L).apply($L)",
+                            CodecsName,
+                            iso.fields.size(),
+                            iso.generatedType,
+                            calculatedFields,
+                            fieldNames
+                            );
+                    builder.addField(b.build());
                 });
+                for (Map.Entry<String, TypeSpec.Builder> builder : builders.entrySet()) {
+                    TypeSpec spec = builder.getValue().build();
+                    JavaFile.Builder fb = JavaFile.builder(builder.getKey(), spec);
+                    fb.build().writeTo(filer);
+                }
             }
 
         } catch (ProcessorException e) {
             messager.printMessage(Diagnostic.Kind.ERROR, e.getMessage(), e.getElement());
+        } catch (IOException e) {
+            messager.printMessage(Diagnostic.Kind.ERROR, e.getMessage());
         }
 
 
         return true;
     }
 
-    private void createIso(TypeElement e) {
+    private String useCodecs(Map<TypeName, String> codecs, Map<String, TypeName> fields) {
+        List<String> list = new ArrayList<>();
+        for (TypeName tn : fields.values()) {
+            String codec = codecs.get(tn.box());
+            list.add(codec);
+        }
+
+        return list.stream().collect(Collectors.joining(", "));
+    }
+
+    private IsoContainer createIso(TypeElement e, String target) {
+
         Stream<ExecutableElement> constructors = ElementFilter.constructorsIn(e.getEnclosedElements()).stream();
 
         List<? extends Element> methodsOrFields = methodsOrFields(e);
@@ -63,12 +111,16 @@ public class IsoProcessor extends AbstractProcessor {
         else if (methodsOrFields.size() > 8 ) {
             throw new ProcessorException(e, "We only support max 8 fields");
         }
+        PackageElement packageOf = processingEnv.getElementUtils().getPackageOf(e.getEnclosingElement());
+        if (target.trim().isEmpty()) {
+            target = packageOf.getQualifiedName().toString();
+        }
 
         Optional<ExecutableElement> maybeCtor = constructors.
                 filter(c -> c.getParameters().size() == methodsOrFields.size()).findFirst();
 
         if (!maybeCtor.isPresent()) {
-            messager.printMessage(Diagnostic.Kind.ERROR, "No usable constructor matching arity of fields or getters found", e);
+            throw new ProcessorException(e, "No usable constructor matching arity of fields or getters found");
         }
         else {
             ExecutableElement ctor = maybeCtor.get();
@@ -107,8 +159,7 @@ public class IsoProcessor extends AbstractProcessor {
                             build()).
                     build();
 
-            PackageElement packageOf = processingEnv.getElementUtils().getPackageOf(e.getEnclosingElement());
-            JavaFile.Builder fb = JavaFile.builder(packageOf.getQualifiedName().toString(), isoType);
+            JavaFile.Builder fb = JavaFile.builder(target, isoType);
             try {
                 fb.build().writeTo(filer);
             } catch (IOException e1) {
@@ -119,6 +170,32 @@ public class IsoProcessor extends AbstractProcessor {
                 );
             }
         }
+        Map<String, TypeName> fields = methodsOrFields.stream().map(elem -> Tuple.of(fieldNameOf(elem), getType(elem))).collect(Collectors.toMap(tup -> tup._1, tup -> tup._2));
+        return new IsoContainer(fields, ClassName.get(packageOf.getQualifiedName().toString(), e.getSimpleName() + "Iso"));
+    }
+
+    private String fieldNameOf(Element elem) {
+        String basename = elem.getSimpleName().toString();
+        if (elem.getKind() == ElementKind.METHOD) {
+            if (basename.startsWith("get")) return basename.substring("get".length());
+            else if (basename.startsWith("is")) return basename.substring("is".length());
+            return basename;
+        }
+        return basename;
+    }
+
+    private Map<TypeName, String> getDefaultCodecs() {
+        Map<TypeName, String> defaultCodecs = new HashMap<>();
+        TypeElement typeElement = processingEnv.getElementUtils().getTypeElement(Codecs.class.getName());
+        List<? extends Element> enclosedElements = typeElement.getEnclosedElements();
+        for (Element enclosedElement : enclosedElements) {
+            if (enclosedElement.getModifiers().containsAll(EnumSet.of(Modifier.STATIC, Modifier.FINAL)) && enclosedElement.getKind().isField()) {
+                DeclaredType enclosingElement = (DeclaredType) enclosedElement.asType();
+                TypeMirror first = enclosingElement.getTypeArguments().get(0);
+                defaultCodecs.put(TypeName.get(first), String.format("%s.%s", typeElement.getSimpleName(), enclosedElement.getSimpleName()));
+            }
+        }
+        return defaultCodecs;
     }
 
     private boolean validateCtor(List<? extends Element> methodsOrFields, ExecutableElement ctor, List<? extends VariableElement> parameters) {
@@ -166,8 +243,9 @@ public class IsoProcessor extends AbstractProcessor {
     }
 
     private boolean isValidGetter(ExecutableElement method) {
+        String methodName = method.getSimpleName().toString();
         return method.getModifiers().contains(Modifier.PUBLIC) &&
-                method.getSimpleName().toString().startsWith("get");
+                (methodName.startsWith("get") || methodName.startsWith("is"));
     }
 
     private boolean isValidField(VariableElement field) {
@@ -211,6 +289,16 @@ public class IsoProcessor extends AbstractProcessor {
             tuple = ParameterizedTypeName.get(ClassName.get("javaslang", String.format("Tuple%s", arity)), list.toArray(new TypeName[list.size()]));
             tupleValues = IntStream.range(1, arity + 1).mapToObj(i -> String.format("t._%s", i)).collect(Collectors.joining(", "));
             return this;
+        }
+    }
+
+    private class IsoContainer {
+        Map<String, TypeName> fields;
+        ClassName generatedType;
+
+        public IsoContainer(Map<String, TypeName> fields, ClassName generatedType) {
+            this.fields = fields;
+            this.generatedType = generatedType;
         }
     }
 }
