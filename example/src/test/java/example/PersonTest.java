@@ -9,17 +9,17 @@ import static org.junit.Assert.assertEquals;
 
 public class PersonTest {
     private JsonCodec<Person> personCodec = Codecs.codec2(PersonIso.INSTANCE, Codecs.StringCodec, Codecs.intCodec).apply("name", "age");
-    Json.JObject json = Json.jObject(
+    private Json.JObject json = Json.jObject(
             Json.entry("name", "Erlend"),
             Json.entry("age", 35)
     );
-    Person expected = new Person("Erlend", 35);
+    private Person testPerson = new Person("Erlend", 35);
 
     @Test
     public void testSerialize() {
 
         Person person = personCodec.fromJsonUnsafe(json);
-        assertEquals(expected, person);
+        assertEquals(testPerson, person);
 
         Json.JValue computed = personCodec.toJson(person).get();
         assertEquals(json, computed);
@@ -28,13 +28,13 @@ public class PersonTest {
     @Test
     public void testGenerated() {
 
-        Person person = GeneratedCodecs.Person.fromJsonUnsafe(json);
-        assertEquals(expected, person);
+        Person person = GeneratedCodecs.PersonCodec.fromJsonUnsafe(json);
+        assertEquals(testPerson, person);
 
-        Json.JValue computed = GeneratedCodecs.Person.toJson(person).get();
+        Json.JValue computed = GeneratedCodecs.PersonCodec.toJson(person).get();
         assertEquals(json, computed);
 
-        assertEquals(expected, personCodec.fromJsonUnsafe(computed));
+        assertEquals(testPerson, personCodec.fromJsonUnsafe(computed));
 
     }
 }

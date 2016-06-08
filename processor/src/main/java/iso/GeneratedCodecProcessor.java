@@ -3,6 +3,7 @@ package iso;
 
 import com.squareup.javapoet.*;
 import javaslang.Tuple;
+import javaslang.Tuple2;
 import net.hamnaberg.json.Codecs;
 import net.hamnaberg.json.Iso;
 import net.hamnaberg.json.JsonCodec;
@@ -42,42 +43,22 @@ public class GeneratedCodecProcessor extends AbstractProcessor {
         try {
             if (!classes.isEmpty()) {
                 Map<TypeName, String> codecs = getDefaultCodecs();
-                Map<String, TypeSpec.Builder> builders = new HashMap<>();
 
+                classes.forEach(type -> {
+                    ClassName generatedCodecsName = getGeneratedName(type);
+                    TypeName typeName = getType(type);
+                    codecs.put(typeName, String.format("%s.%s", generatedCodecsName, String.format("%sCodec", type.getSimpleName())));
+                });
+
+                CodecGenerator generator = new CodecGenerator();
                 classes.forEach(e -> {
                     validate(e);
-                    GeneratedCodec generatedCodec = e.getAnnotation(GeneratedCodec.class);
-                    IsoContainer iso = createIso(e, generatedCodec.targetPackage());
-                    String targetPackage = iso.generatedType.packageName();
-                    TypeSpec.Builder builder = builders.get(targetPackage);
-                    ClassName generatedCodecsName = ClassName.get(targetPackage, "GeneratedCodecs");
-                    if (builder == null) {
-                        builder = TypeSpec.classBuilder(generatedCodecsName);
-                        builder.addModifiers(Modifier.PUBLIC, Modifier.ABSTRACT);
-                        builder.addMethod(MethodSpec.constructorBuilder().addModifiers(Modifier.PRIVATE).build());
-                        builders.put(targetPackage, builder);
-                    }
-                    TypeName typeName = getType(e);
-                    ParameterizedTypeName codecType = ParameterizedTypeName.get(jsonCodecName, typeName);
-                    String fieldNames = iso.fields.keySet().stream().map(s -> "\"" + s + "\"").collect(Collectors.joining(","));
-                    String calculatedFields = useCodecs(codecs, iso.fields);
-                    FieldSpec.Builder b = FieldSpec.builder(codecType, e.getSimpleName().toString(), Modifier.PUBLIC, Modifier.STATIC, Modifier.FINAL);
-                    codecs.put(typeName, String.format("%s.%s", generatedCodecsName, e.getSimpleName()));
-                    b.initializer(
-                            "$T.codec$L($T.INSTANCE, $L).apply($L)",
-                            CodecsName,
-                            iso.fields.size(),
-                            iso.generatedType,
-                            calculatedFields,
-                            fieldNames
-                            );
-                    builder.addField(b.build());
+                    String targetPackage = getPackage(e.getAnnotation(GeneratedCodec.class), e);
+                    IsoContainer iso = createIso(e, targetPackage);
+                    generator.add(iso, e, codecs);
                 });
-                for (Map.Entry<String, TypeSpec.Builder> builder : builders.entrySet()) {
-                    TypeSpec spec = builder.getValue().build();
-                    JavaFile.Builder fb = JavaFile.builder(builder.getKey(), spec);
-                    fb.build().writeTo(filer);
-                }
+
+                generator.writeTo(filer);
             }
 
         } catch (ProcessorException e) {
@@ -88,6 +69,20 @@ public class GeneratedCodecProcessor extends AbstractProcessor {
 
 
         return true;
+    }
+
+    private ClassName getGeneratedName(TypeElement type) {
+        String targetPackage = getPackage(type.getAnnotation(GeneratedCodec.class), type);
+        return ClassName.get(targetPackage, "GeneratedCodecs");
+    }
+
+    private String getPackage(GeneratedCodec generatedCodec, TypeElement e) {
+        String target = generatedCodec.targetPackage();
+        TypeName type = getType(e);
+        if (target.trim().isEmpty()) {
+            target = ((ClassName)type).packageName();
+        }
+        return target;
     }
 
     private String useCodecs(Map<TypeName, String> codecs, Map<String, TypeName> fields) {
@@ -112,9 +107,6 @@ public class GeneratedCodecProcessor extends AbstractProcessor {
             throw new ProcessorException(e, "We only support max 8 fields");
         }
         PackageElement packageOf = processingEnv.getElementUtils().getPackageOf(e.getEnclosingElement());
-        if (target.trim().isEmpty()) {
-            target = packageOf.getQualifiedName().toString();
-        }
 
         Optional<ExecutableElement> maybeCtor = constructors.
                 filter(c -> c.getParameters().size() == methodsOrFields.size()).findFirst();
@@ -131,9 +123,8 @@ public class GeneratedCodecProcessor extends AbstractProcessor {
 
             TypeSpec.Builder enumBuilder = TypeSpec.enumBuilder(e.getSimpleName() + "Iso");
 
-            TupleHandler tupleHandler = new TupleHandler(parameters).invoke();
-            ParameterizedTypeName tuple = tupleHandler.getTuple();
-            String tupleValues = tupleHandler.getTupleValues();
+            Tuple2<ParameterizedTypeName, String> tupleHandler = getTuple(parameters);
+            ParameterizedTypeName tupleType = tupleHandler._1;
 
             ClassName targetName = ClassName.get(e);
 
@@ -142,20 +133,20 @@ public class GeneratedCodecProcessor extends AbstractProcessor {
 
 
             TypeSpec isoType = enumBuilder.
-                    addSuperinterface(ParameterizedTypeName.get(ClassName.get(Iso.class), targetName, tuple)).
+                    addSuperinterface(ParameterizedTypeName.get(ClassName.get(Iso.class), targetName, tupleType)).
                     addModifiers(Modifier.PUBLIC).
                     addEnumConstant("INSTANCE").
                     addMethod(MethodSpec.methodBuilder("get").
                             addModifiers(Modifier.PUBLIC).
                             addParameter(targetName, "p").
-                            returns(tuple).
-                            addStatement("return new $T<>($L)", tuple.rawType, targetValues).
+                            returns(tupleType).
+                            addStatement("return new $T<>($L)", tupleType.rawType, targetValues).
                             build()).
                     addMethod(MethodSpec.methodBuilder("reverseGet").
                             addModifiers(Modifier.PUBLIC).
-                            addParameter(tuple, "t").
+                            addParameter(tupleType, "t").
                             returns(targetName).
-                            addStatement("return new $T($L)", targetName, tupleValues).
+                            addStatement("return new $T($L)", targetName, tupleHandler._2).
                             build()).
                     build();
 
@@ -261,35 +252,18 @@ public class GeneratedCodecProcessor extends AbstractProcessor {
         }
     }
 
+
+    private Tuple2<ParameterizedTypeName, String> getTuple(List<? extends VariableElement> parameters) {
+        List<TypeName> list = parameters.stream().map(e1 -> getType(e1).box()).collect(Collectors.toList());
+        int arity = parameters.size();
+        ParameterizedTypeName tuple = ParameterizedTypeName.get(ClassName.get("javaslang", String.format("Tuple%s", arity)), list.toArray(new TypeName[list.size()]));
+        String tupleValues = IntStream.range(1, arity + 1).mapToObj(i -> String.format("t._%s", i)).collect(Collectors.joining(", "));
+        return Tuple.of(tuple, tupleValues);
+    }
+
     @Override
     public SourceVersion getSupportedSourceVersion() {
         return SourceVersion.latestSupported();
-    }
-
-    private class TupleHandler {
-        private List<? extends VariableElement> parameters;
-        private ParameterizedTypeName tuple;
-        private String tupleValues;
-
-        TupleHandler(List<? extends VariableElement> parameters) {
-            this.parameters = parameters;
-        }
-
-        ParameterizedTypeName getTuple() {
-            return tuple;
-        }
-
-        String getTupleValues() {
-            return tupleValues;
-        }
-
-        TupleHandler invoke() {
-            List<TypeName> list = parameters.stream().map(e1 -> getType(e1).box()).collect(Collectors.toList());
-            int arity = parameters.size();
-            tuple = ParameterizedTypeName.get(ClassName.get("javaslang", String.format("Tuple%s", arity)), list.toArray(new TypeName[list.size()]));
-            tupleValues = IntStream.range(1, arity + 1).mapToObj(i -> String.format("t._%s", i)).collect(Collectors.joining(", "));
-            return this;
-        }
     }
 
     private class IsoContainer {
@@ -299,6 +273,45 @@ public class GeneratedCodecProcessor extends AbstractProcessor {
         public IsoContainer(Map<String, TypeName> fields, ClassName generatedType) {
             this.fields = fields;
             this.generatedType = generatedType;
+        }
+    }
+
+    private class CodecGenerator {
+        private Map<String, TypeSpec.Builder> builders = new HashMap<>();
+
+        void add(IsoContainer iso, TypeElement e, Map<TypeName, String> codecs) {
+            ClassName generatedCodecsName = getGeneratedName(e);
+
+            TypeSpec.Builder builder = builders.get(generatedCodecsName.packageName());
+
+            if (builder == null) {
+                builder = TypeSpec.classBuilder(generatedCodecsName);
+                builder.addModifiers(Modifier.PUBLIC, Modifier.ABSTRACT);
+                builder.addMethod(MethodSpec.constructorBuilder().addModifiers(Modifier.PRIVATE).build());
+                builders.put(generatedCodecsName.packageName(), builder);
+            }
+            TypeName typeName = getType(e);
+            ParameterizedTypeName codecType = ParameterizedTypeName.get(jsonCodecName, typeName);
+            String fieldNames = iso.fields.keySet().stream().map(s -> "\"" + s + "\"").collect(Collectors.joining(","));
+            String typedCodecs = useCodecs(codecs, iso.fields);
+            FieldSpec.Builder b = FieldSpec.builder(codecType, String.format("%sCodec", e.getSimpleName()), Modifier.PUBLIC, Modifier.STATIC, Modifier.FINAL);
+            b.initializer(
+                    "$T.codec$L($T.INSTANCE, $L).apply($L)",
+                    CodecsName,
+                    iso.fields.size(),
+                    iso.generatedType,
+                    typedCodecs,
+                    fieldNames
+            );
+            builder.addField(b.build());
+        }
+
+        void writeTo(Filer filer) throws IOException {
+            for (Map.Entry<String, TypeSpec.Builder> builder : builders.entrySet()) {
+                TypeSpec spec = builder.getValue().build();
+                JavaFile.Builder fb = JavaFile.builder(builder.getKey(), spec);
+                fb.build().writeTo(filer);
+            }
         }
     }
 }
@@ -311,7 +324,7 @@ class ProcessorException extends RuntimeException {
         this.element = element;
     }
 
-    public Element getElement() {
+    Element getElement() {
         return element;
     }
 }
