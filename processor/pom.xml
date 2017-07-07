@@ -20,7 +20,7 @@
   <modelVersion>4.0.0</modelVersion>
   <parent>
     <groupId>net.hamnaberg.json</groupId>
-    <artifactId>iso-compiler-generator</artifactId>
+    <artifactId>codec-compiler-generator</artifactId>
     <version>0.1-SNAPSHOT</version>
   </parent>
   <artifactId>processor</artifactId>
@@ -40,7 +40,7 @@
     <dependency>
       <groupId>com.squareup</groupId>
       <artifactId>javapoet</artifactId>
-      <version>1.7.0</version>
+      <version>1.9.0</version>
     </dependency>
   </dependencies>
   <build>
