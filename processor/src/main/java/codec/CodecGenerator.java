@@ -1,9 +1,7 @@
 package codec;
 
-import com.squareup.javapoet.ClassName;
 import com.squareup.javapoet.TypeName;
 import io.vavr.collection.Map;
-import net.hamnaberg.json.annotations.JsonField;
 import net.hamnaberg.json.codec.Codecs;
 
 import javax.lang.model.element.Element;
@@ -25,9 +23,7 @@ public class CodecGenerator {
     }
 
     CodecType generate(TypeElement type) {
-        Map<String, TypeName> fields = IsoGenerator.getElementsAnnotatedWith(type, JsonField.class).
-                toLinkedMap(e -> e.getAnnotation(JsonField.class).value(), e -> ClassName.get(e.asType()));
-        return new CodecType(type, fields, getDefaultCodecs());
+        return new CodecType(type, Fields.fieldsFrom(type), getDefaultCodecs());
     }
 
     private Map<TypeName, String> getDefaultCodecs() {

@@ -12,10 +12,10 @@ import javax.lang.model.element.TypeElement;
 
 public class CodecType {
     private final ClassName poetType;
-    private final Map<String, TypeName> fields;
+    private final Fields fields;
     private final Map<TypeName, String> defaultCodecs;
 
-    public CodecType(TypeElement type, Map<String, TypeName> fields, Map<TypeName, String> defaultCodecs) {
+    public CodecType(TypeElement type, Fields fields, Map<TypeName, String> defaultCodecs) {
         this.poetType = ClassName.get(type);
         this.fields = fields;
         this.defaultCodecs = defaultCodecs;
@@ -24,8 +24,8 @@ public class CodecType {
     public FieldSpec toSpec(ClassName isoType) {
         ParameterizedTypeName name = ParameterizedTypeName.get(ClassName.get(JsonCodec.class), poetType);
         FieldSpec.Builder builder = FieldSpec.builder(name, poetType.simpleName() + "Codec", Modifier.PUBLIC, Modifier.STATIC, Modifier.FINAL);
-        Seq<CodeBlock> blocks = fields.map((tuple) -> {
-            TypeName type = tuple._2.box();
+        Seq<CodeBlock> blocks = fields.getFields().map((tuple) -> {
+            TypeName type = tuple._2.getType().box();
 
             if (type instanceof ParameterizedTypeName) {
                 return parameterized((ParameterizedTypeName) type, tuple._1);

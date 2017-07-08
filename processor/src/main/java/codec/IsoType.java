@@ -3,9 +3,6 @@ package codec;
 import com.squareup.javapoet.*;
 import io.vavr.Tuple;
 import io.vavr.Tuple2;
-import io.vavr.collection.HashSet;
-import io.vavr.collection.List;
-import io.vavr.collection.Map;
 import io.vavr.collection.Seq;
 import net.hamnaberg.json.codec.Iso;
 
@@ -15,10 +12,10 @@ import java.util.stream.IntStream;
 
 public class IsoType {
     private final ClassName sourceType;
-    private final List<? extends Element> fields;
+    private final Fields fields;
     private final ExecutableElement factory;
 
-    public IsoType(TypeElement type, List<? extends Element> fields, ExecutableElement factory) {
+    public IsoType(TypeElement type, Fields fields, ExecutableElement factory) {
         this.sourceType = ClassName.get(type);
         this.fields = fields;
         this.factory = factory;
@@ -36,7 +33,7 @@ public class IsoType {
                 addModifiers(Modifier.PUBLIC).
                 addParameter(sourceType, "p").
                 returns(tupleType._1).
-                addStatement("return $T.of($L)", tuples, fields.map(e2 -> String.format("p.%s", e2.getSimpleName())).mkString(", ")).
+                addStatement("return $T.of($L)", tuples, fields.getFields().values().map(e2 -> String.format("p.%s", e2.getName())).mkString(", ")).
                 build());
 
         builder.addMethod(MethodSpec.methodBuilder("reverseGet").
@@ -67,7 +64,7 @@ public class IsoType {
     private Tuple2<ParameterizedTypeName, String> getTupleType() {
         int arity = fields.size();
         String packageName = arity < 9 ? "io.vavr" : "net.hamnaberg.json.util";
-        Seq<TypeName> types = fields.map(e -> TypeName.get(e.asType()).box());
+        Seq<TypeName> types = fields.getFields().values().map(e -> e.getType().box());
 
         ParameterizedTypeName tuple = ParameterizedTypeName.get(
                 ClassName.get(packageName, String.format("Tuple%s", arity)), types.toJavaArray(TypeName.class));

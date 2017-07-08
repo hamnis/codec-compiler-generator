@@ -18,7 +18,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Set;
 
-@SupportedAnnotationTypes({"JsonClass", "JsonFactory", "JsonField"})
+@SupportedAnnotationTypes({"net.hamnaberg.json.annotations.JsonClass", "net.hamnaberg.json.annotations.JsonFactory", "net.hamnaberg.json.annotations.JsonField"})
 public class JsonCodecProcessor extends AbstractProcessor {
     private Filer filer;
     private Messager messager;

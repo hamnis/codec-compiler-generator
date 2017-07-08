@@ -5,9 +5,7 @@ import net.hamnaberg.json.annotations.JsonField;
 
 @JsonClass
 public final class Address {
-    @JsonField("street")
     public final String street;
-    @JsonField("city")
     public final String city;
 
     public Address(String street, String city) {

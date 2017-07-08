@@ -16,7 +16,7 @@ import java.lang.annotation.Annotation;
 public class IsoGenerator {
 
     public IsoType generate(TypeElement type) {
-        List<? extends Element> fields = getElementsAnnotatedWith(type, JsonField.class);
+        Fields fields = Fields.fieldsFrom(type);
         Option<ExecutableElement> factory = getElementsAnnotatedWith(type, JsonFactory.class).headOption().flatMap(
                 e -> e instanceof ExecutableElement ? Option.some((ExecutableElement)e) : Option.none()
         ).orElse(() -> getConstructor(type, fields.size()));
@@ -38,7 +38,7 @@ public class IsoGenerator {
 
     }
 
-    static Option<ExecutableElement> getConstructor(TypeElement type, int arity) {
+    private static Option<ExecutableElement> getConstructor(TypeElement type, int arity) {
         return Option.ofOptional(
                 ElementFilter.constructorsIn(type.getEnclosedElements())
                         .stream().filter(e -> e.getParameters().size() == arity).findFirst()
