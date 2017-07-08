@@ -27,7 +27,7 @@ public class IsoGenerator {
         List<? extends Element> fields = getElementsAnnotatedWith(type, JsonField.class);
         Option<ExecutableElement> factory = getElementsAnnotatedWith(type, JsonFactory.class).headOption().flatMap(
                 e -> e instanceof ExecutableElement ? Option.some((ExecutableElement)e) : Option.none()
-        ).orElse(getConstructor(type, fields.size()));
+        ).orElse(() -> getConstructor(type, fields.size()));
 
         if (fields.isEmpty()) {
             throw new ProcessorException(type, "Missing fields");
@@ -47,6 +47,9 @@ public class IsoGenerator {
     }
 
     static Option<ExecutableElement> getConstructor(TypeElement type, int arity) {
-        return Option.ofOptional(ElementFilter.constructorsIn(List.of(type)).stream().filter(e -> e.getParameters().size() == arity).findFirst());
+        return Option.ofOptional(
+                ElementFilter.constructorsIn(type.getEnclosedElements())
+                        .stream().filter(e -> e.getParameters().size() == arity).findFirst()
+        );
     }
 }

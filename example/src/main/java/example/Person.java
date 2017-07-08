@@ -1,6 +1,7 @@
 package example;
 
 
+import io.vavr.control.Option;
 import net.hamnaberg.codec.annotations.JsonClass;
 import net.hamnaberg.codec.annotations.JsonFactory;
 import net.hamnaberg.codec.annotations.JsonField;
@@ -12,10 +13,14 @@ public class Person {
     @JsonField("age")
     public final int age;
 
+    @JsonField("address")
+    public final Option<Address> address;
+
     @JsonFactory
-    public Person(String name, int age) {
+    public Person(String name, int age, Option<Address> address) {
         this.name = name;
         this.age = age;
+        this.address = address;
     }
 
     @Override
@@ -26,14 +31,15 @@ public class Person {
         Person person = (Person) o;
 
         if (age != person.age) return false;
-        return name.equals(person.name);
-
+        if (!name.equals(person.name)) return false;
+        return address.equals(person.address);
     }
 
     @Override
     public int hashCode() {
         int result = name.hashCode();
         result = 31 * result + age;
+        result = 31 * result + address.hashCode();
         return result;
     }
 }
