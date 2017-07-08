@@ -1,7 +1,7 @@
 package example;
 
-import net.hamnaberg.codec.annotations.JsonClass;
-import net.hamnaberg.codec.annotations.JsonField;
+import net.hamnaberg.json.annotations.JsonClass;
+import net.hamnaberg.json.annotations.JsonField;
 
 @JsonClass
 public final class Address {

@@ -6,21 +6,19 @@ import io.vavr.Tuple;
 import io.vavr.Tuple2;
 import io.vavr.collection.List;
 import io.vavr.collection.Map;
-import io.vavr.control.Option;
-import net.hamnaberg.codec.annotations.JsonClass;
-import net.hamnaberg.codec.annotations.JsonField;
+import net.hamnaberg.json.annotations.JsonClass;
+import net.hamnaberg.json.annotations.JsonField;
 
 import javax.annotation.processing.*;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.*;
 import javax.lang.model.util.ElementFilter;
 import javax.tools.Diagnostic;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Set;
 
-@SupportedAnnotationTypes({"net.hamnaberg.codec.annotations.JsonClass", "net.hamnaberg.codec.annotations.JsonFactory", "net.hamnaberg.codec.annotations.JsonField"})
+@SupportedAnnotationTypes({"JsonClass", "JsonFactory", "JsonField"})
 public class JsonCodecProcessor extends AbstractProcessor {
     private Filer filer;
     private Messager messager;
@@ -34,7 +32,7 @@ public class JsonCodecProcessor extends AbstractProcessor {
 
     @Override
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
-        IsoGenerator iso = new IsoGenerator(processingEnv.getTypeUtils(), processingEnv.getElementUtils());
+        IsoGenerator iso = new IsoGenerator();
         CodecGenerator codecGenerator = new CodecGenerator(processingEnv.getElementUtils());
 
         try {

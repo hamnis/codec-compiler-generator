@@ -3,7 +3,7 @@ package codec;
 import com.squareup.javapoet.ClassName;
 import com.squareup.javapoet.TypeName;
 import io.vavr.collection.Map;
-import net.hamnaberg.codec.annotations.JsonField;
+import net.hamnaberg.json.annotations.JsonField;
 import net.hamnaberg.json.codec.Codecs;
 
 import javax.lang.model.element.Element;

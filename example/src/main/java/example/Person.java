@@ -2,9 +2,9 @@ package example;
 
 
 import io.vavr.control.Option;
-import net.hamnaberg.codec.annotations.JsonClass;
-import net.hamnaberg.codec.annotations.JsonFactory;
-import net.hamnaberg.codec.annotations.JsonField;
+import net.hamnaberg.json.annotations.JsonClass;
+import net.hamnaberg.json.annotations.JsonFactory;
+import net.hamnaberg.json.annotations.JsonField;
 
 @JsonClass
 public class Person {

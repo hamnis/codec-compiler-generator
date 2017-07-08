@@ -1,4 +1,4 @@
-package net.hamnaberg.codec.annotations;
+package net.hamnaberg.json.annotations;
 
 import java.lang.annotation.*;
 

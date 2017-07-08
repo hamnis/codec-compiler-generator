@@ -1,10 +1,9 @@
 package codec;
 
 import io.vavr.collection.List;
-import io.vavr.collection.Map;
 import io.vavr.control.Option;
-import net.hamnaberg.codec.annotations.JsonFactory;
-import net.hamnaberg.codec.annotations.JsonField;
+import net.hamnaberg.json.annotations.JsonFactory;
+import net.hamnaberg.json.annotations.JsonField;
 
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
@@ -15,13 +14,6 @@ import javax.lang.model.util.Types;
 import java.lang.annotation.Annotation;
 
 public class IsoGenerator {
-    private final Types typeUtils;
-    private final Elements elementUtils;
-
-    public IsoGenerator(Types typeUtils, Elements elementUtils) {
-        this.typeUtils = typeUtils;
-        this.elementUtils = elementUtils;
-    }
 
     public IsoType generate(TypeElement type) {
         List<? extends Element> fields = getElementsAnnotatedWith(type, JsonField.class);
