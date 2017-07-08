@@ -7,7 +7,6 @@ import net.hamnaberg.json.annotations.JsonField;
 import javax.lang.model.element.*;
 import javax.lang.model.util.ElementFilter;
 import java.util.EnumSet;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 
 public final class Fields {

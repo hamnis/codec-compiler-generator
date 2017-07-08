@@ -6,6 +6,7 @@ import io.vavr.Tuple2;
 import io.vavr.collection.Seq;
 import net.hamnaberg.json.codec.Iso;
 
+import javax.annotation.Generated;
 import javax.lang.model.element.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -26,6 +27,7 @@ public class IsoType {
         ClassName tuples = ClassName.get("net.hamnaberg.json.util", "Tuples");
         Tuple2<ParameterizedTypeName, String> tupleType = getTupleType();
         TypeSpec.Builder builder = TypeSpec.enumBuilder(getIsoType());
+        builder.addAnnotation(JsonCodecProcessor.generatedAnnotation());
         builder.addModifiers(Modifier.PUBLIC);
         builder.addEnumConstant("INSTANCE");
         builder.addSuperinterface(ParameterizedTypeName.get(ClassName.get(Iso.class), sourceType, tupleType._1));
